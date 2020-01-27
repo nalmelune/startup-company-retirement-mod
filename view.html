@@ -1,0 +1,18 @@
+<h1>
+    <i class="fa fa-cubes"></i>
+    Auto Retirement Mod
+    <i class="fa fa-times pull-right close-button" close-all-ui clo></i>
+</h1>
+
+<div class="padding">
+    <h4>Currently saving {{autoretirementCtrl.savingsPercent}}%</h4>
+    <input type="range" min="0" max="100" step="1" ng-model="autoretirementCtrl.savingsPercent">
+
+    <h4>Enable Notifications?</h4>
+    <div class="toggle-switch"
+         ng-class="{ active: autoretirementCtrl.notificationsEnabled}"
+         ng-click="autoretirementCtrl.toggleNotifications()">
+        <span></span>
+    </div>
+</div>
+
