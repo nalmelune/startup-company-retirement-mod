@@ -50,7 +50,51 @@ exports.onLoadGame = settings => {
     NotificationsEnabled = settings.autoRetirement ? settings.autoRetirement.notificationsEnabled : true;
 };
 exports.onNewHour = settings => {
+
+    //region AutoUpgrade
+    function runGameLogicForFeatureUpdate(requirements, featureInstance, levelAmount) {
+        Helpers.ApplyRequirementsToInventory(requirements);
+        settings.xp += 2 * Helpers.CalculateComponentProductionHours({requirements: requirements});
+        featureInstance.quality.current += levelAmount;
+        PlaySound(Sounds.place5);
+        e.$broadcast(Enums.GameEvents.ProductChange);
+        Helpers.RunBackgroundWorker(null, null, !0);
+        setTimeout(() => {
+            e.$broadcast(Enums.GameEvents.MilestoneTrigger)
+        }, 500);
+    }
+
+    function upgrade(featureInstance, featureProperty, levelAmount) {
+        let requirements = Helpers.GetInstanceMultiplier(featureInstance, Enums.FeatureProperties.Quality, levelAmount);
+        let featuresProduct = settings.products.find(product => product.id == featureInstance.productId);
+        let productsFrameworkName = featuresProduct.frameworkName;
+        let maxFeatureLevel = Frameworks.find(framework => framework.name == productsFrameworkName).maxFeatureLevel;
+        let upgradeReady = Helpers.ConvertRequirementsIntoStacks(requirements).every(e => e.isAvailableInInventory)
+            && featureInstance.quality.current + levelAmount <= maxFeatureLevel;
+
+        if (upgradeReady) {
+            runGameLogicForFeatureUpdate(requirements, featureInstance, levelAmount);
+        } else {
+            console.debug("Can't update feature " + featureInstance.featureName + " of product " + featuresProduct.name);
+        }
+    }
+
+    function getCategoryName(featureInstances) {
+        return Features.find(featureConst => featureConst.name == featureInstances.featureName).categoryName;
+    }
+
+    settings.products.forEach(product => {
+        let featureWithLowestLevelForProduct = settings.featureInstances
+            .filter(featureInstance => getCategoryName(featureInstance) == Enums.FeatureCategories.Users)
+            .filter(featureInstance => featureInstance.productId == product.id)
+            .reduce((prev, curr) => prev.quality.current < curr.quality.current ? prev : curr);
+
+        // TODO: 10 to GUI changeable variable
+        upgrade(featureWithLowestLevelForProduct, Enums.FeatureProperties.Quality, 10);
+    });
+    //endregion
 };
+
 exports.onNewDay = settings => {
     function calculateActualSavings(addToBalance) {
         let t = settings.products.find(e => e.investor);
