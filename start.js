@@ -50,9 +50,6 @@ exports.onLoadGame = settings => {
     NotificationsEnabled = settings.autoRetirement ? settings.autoRetirement.notificationsEnabled : true;
 };
 exports.onNewHour = settings => {
-    // if (settings.hasOwnProperty("autoRetirement")) {
-    //     settings.autoretirementCtrl.savingsPercent = settings.autoRetirement["savingsPercent"]
-    // }
 };
 exports.onNewDay = settings => {
     function calculateActualSavings(addToBalance) {
@@ -64,14 +61,7 @@ exports.onNewDay = settings => {
         return Math.round(addToBalance - investorCut - taxes);
     }
 
-    console.log(Helpers.GetRetirementInfo());
-    console.log(Helpers.GetCurrentEmployeeStat());
-    console.log(Helpers.GetHostingPerformance());
-    // console.log(Helpers.GetRackPerformance());
-
-    let Change = Math.round(settings.balance - OldBalance);
-    if (Change > 0) {
-        let addToBalance = Math.round((Change * RetirementSavingsPercent) / 100);
+    function runGameLogicForIncreasingRetirementFunds(addToBalance) {
         let total = calculateActualSavings(addToBalance);
 
         e.safeBuy(() => {
@@ -82,10 +72,23 @@ exports.onNewDay = settings => {
                 amount: total
             });
         }, addToBalance, Helpers.GetLocalized("transaction_retirement_fund"), !0);
+        return total;
+    }
+
+    let Change = settings.products.map(product => {
+        let lastRegisteredUsersInfo = product.stats.registeredUsers[product.stats.registeredUsers.length - 1];
+        let change = lastRegisteredUsersInfo.income - lastRegisteredUsersInfo.expenses;
+        console.debug("Last day project " + product.name + " made " + numeral(change).format(Configuration.CURRENCY_FORMAT));
+        return change;
+    }).reduce((previousValue, currentValue) => previousValue + currentValue);
+
+    if (Change > 0) {
+        let addToBalance = Math.round((Change * RetirementSavingsPercent) / 100);
+        let total = runGameLogicForIncreasingRetirementFunds(addToBalance);
 
         if (NotificationsEnabled) {
-            Helpers.ShowNotification("Day " + (e.daysPlayed - 1) + ". Savings increased by $"
-                + total.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","), "#000000", 24, false);
+            Helpers.ShowNotification("Day " + (e.daysPlayed - 1) + ". Savings increased by "
+                + numeral(total).format(Configuration.CURRENCY_FORMAT), "#000000", 24, false);
         }
         OldBalance = settings.balance;
     }
