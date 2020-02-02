@@ -50,7 +50,89 @@ exports.onLoadGame = settings => {
     NotificationsEnabled = settings.autoRetirement ? settings.autoRetirement.notificationsEnabled : true;
 };
 exports.onNewHour = settings => {
+
+    //region AutoOutSource
+    function runGameLogicForCreatingNewOutsourcingTask(anyIdleOutsourcingExecutive, componentName) {
+        function getRequirementsMap(requirements) {
+            let requirementsMap = {};
+            for (const requirementItem of requirements) {
+                if (requirementItem != null) {
+                    requirementsMap[requirementItem.componentName] = requirementItem.amount;
+                }
+            }
+            return requirementsMap
+        }
+
+        //TODO: 100 to GUI changeable variable
+        let requirementsArray = [{componentName: componentName, amount: 100}];
+        let requirementsMap = getRequirementsMap(requirementsArray);
+        let task = {
+            id: chance.guid(),
+            requirements: requirementsMap,
+            deadline: {
+                total: 24 * Math.max(Math.round(Helpers.GetOutsourcingBaseDays(requirementsMap) / 4), 1),
+                completed: 0
+            },
+            timestamp: Helpers.GetCurrentTimestamp(),
+            number: Helpers.GetNextOutsourcingTaskNumber(),
+            offers: [],
+            won: null,
+            delivered: !1,
+            hoursLeft: 24,
+            maxOffers: Helpers.GetMaxOutsourcingOffersByEmployeeLevel(anyIdleOutsourcingExecutive.level)
+        };
+        task.startPrice = Math.max(Math.round(2 * Helpers.GetMarketPriceByTask(task)), 1e3);
+        task.fee = Math.max(30 * _.sum(requirementsArray.map(e => e.amount)), 1e3);
+
+        e.settings.outsourcingTasks.push(task);
+        e.addTransaction(Helpers.GetLocalized("transaction_outsourcing_fee"), -task.fee, !0);
+        anyIdleOutsourcingExecutive.outsourcingTaskId = task.id;
+    }
+
+    function submitNewTask() {
+        function getPlanProgress() {
+            let componentsPlanDoneByComponentArray = [];
+            Components.forEach(component => {
+                let productionPlanComponentValue = settings.productionPlans[0].production[component.name];
+                let inventoryComponentValue = settings.inventory[component.name];
+                if (!productionPlanComponentValue || productionPlanComponentValue == 0) {
+                    console.log("Component " + component + " has production value " + productionPlanComponentValue);
+                    return;
+                }
+                if (productionPlanComponentValue &&
+                    (!inventoryComponentValue || inventoryComponentValue == 0)) {
+                    componentsPlanDoneByComponentArray.push({componentName: component.name, done: 0});
+                    console.log("returning on 2");
+                    return;
+                }
+                let donePercent = Math.round((inventoryComponentValue / productionPlanComponentValue) * 100);
+                console.log({componentName: component.name, done: donePercent});
+                componentsPlanDoneByComponentArray.push({componentName: component.name, done: donePercent});
+                console.log("returning on 3");
+            });
+
+            return componentsPlanDoneByComponentArray;
+        }
+
+        let anyIdleOutsourcingExecutive = Helpers.GetAllEmployees()
+            .filter(employee => employee.employeeTypeName == Enums.EmployeeTypeNames.OutsourcingExecutive)
+            .find(employee => employee.outsourcingTaskId == null);
+
+        if (!anyIdleOutsourcingExecutive) return;
+        if (!settings.productionPlans[0]) return;
+        let componentsPlanDoneByComponentArray = getPlanProgress();
+        let componentWithLowestPlanDone = componentsPlanDoneByComponentArray
+            .reduce((prev, curr) => prev.done < curr.done ? prev : curr);
+
+        if (anyIdleOutsourcingExecutive) {
+            runGameLogicForCreatingNewOutsourcingTask(anyIdleOutsourcingExecutive, componentWithLowestPlanDone.componentName);
+        }
+    }
+
+    submitNewTask();
+    //endregion
 };
+
 exports.onNewDay = settings => {
     function calculateActualSavings(addToBalance) {
         let t = settings.products.find(e => e.investor);
