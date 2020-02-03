@@ -96,19 +96,23 @@ exports.onNewHour = settings => {
                 let productionPlanComponentValue = settings.productionPlans[0].production[component.name];
                 let inventoryComponentValue = settings.inventory[component.name];
                 if (!productionPlanComponentValue || productionPlanComponentValue == 0) {
-                    console.log("Component " + component + " has production value " + productionPlanComponentValue);
                     return;
                 }
                 if (productionPlanComponentValue &&
                     (!inventoryComponentValue || inventoryComponentValue == 0)) {
                     componentsPlanDoneByComponentArray.push({componentName: component.name, done: 0});
-                    console.log("returning on 2");
                     return;
                 }
-                let donePercent = Math.round((inventoryComponentValue / productionPlanComponentValue) * 100);
+                let alreadyOrderedForOutSourcingAmount = settings.outsourcingTasks
+                    .flatMap(task => task.requirements)
+                    .map(requirements => requirements[component.name])
+                    .filter(requirements => requirements)
+                    .reduce((previousValue, currentValue) => previousValue + currentValue, 0);
+
+                let donePercent = Math.round(((inventoryComponentValue + alreadyOrderedForOutSourcingAmount)
+                    / productionPlanComponentValue) * 100);
                 console.log({componentName: component.name, done: donePercent});
                 componentsPlanDoneByComponentArray.push({componentName: component.name, done: donePercent});
-                console.log("returning on 3");
             });
 
             return componentsPlanDoneByComponentArray;
